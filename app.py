@@ -5,6 +5,8 @@ import time
 import os
 import json
 import logging
+import re
+from html import unescape
 from datetime import datetime
 from threading import Lock
 
@@ -49,6 +51,9 @@ CACHE_SECONDS = 1800
 
 # 翻译缓存
 TRANSLATION_CACHE = {}
+
+# 单篇论文的翻译与总结缓存
+ENRICHMENT_CACHE = {}
 
 # 线程锁
 cache_lock = Lock()
@@ -105,6 +110,14 @@ def get_publish_date(item):
 
     except (ValueError, TypeError, OverflowError):
         return "未知日期"
+
+
+def clean_abstract(value):
+    """清理 Crossref 摘要中常见的 JATS/HTML 标签。"""
+    if not isinstance(value, str):
+        return ""
+    text = re.sub(r"<[^>]+>", " ", value)
+    return re.sub(r"\s+", " ", unescape(text)).strip()
 
 
 # ==========================================
@@ -208,7 +221,8 @@ def fetch_journal_papers(journal_key):
             "journal": journal["name"],
             "date": get_publish_date(item),
             "doi": doi,
-            "url": paper_url
+            "url": paper_url,
+            "abstract": clean_abstract(item.get("abstract", ""))
         }
 
         papers.append(paper)
@@ -305,6 +319,97 @@ def get_papers():
         "count": len(all_papers),
         "errors": errors
     })
+
+
+def call_deepseek_enrich(paper):
+    """翻译当前论文，并根据可用元数据生成简洁中文总结。"""
+    if not DEEPSEEK_API_KEY:
+        raise RuntimeError("DeepSeek API Key 未配置")
+
+    source_abstract = paper.get("abstract", "").strip()
+    prompt = {
+        "title": paper.get("title", ""),
+        "abstract": source_abstract,
+        "journal": paper.get("journal", ""),
+        "authors": paper.get("authors", "")
+    }
+    system_prompt = """
+你是一名严谨的科研编辑。请只依据用户提供的论文元数据完成中文翻译与总结。
+返回合法 JSON 对象，必须包含以下字符串字段：
+title_zh：论文标题的简体中文翻译；
+abstract_zh：摘要的完整简体中文翻译；如果没有摘要，明确写“该论文暂未提供公开摘要”；
+summary_zh：用通俗但准确的中文写 3 至 5 段概述，说明研究主题、可能的方法、主要信息和意义。
+不得编造用户没有提供的实验数据、结论或研究方法。没有摘要时，只能根据标题说明研究主题，并明确提示信息有限。
+"""
+    payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)}
+        ],
+        "response_format": {"type": "json_object"},
+        "stream": False,
+        "max_tokens": 3500
+    }
+    response = requests.post(
+        DEEPSEEK_API_URL,
+        headers={
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json=payload,
+        timeout=90
+    )
+    response.raise_for_status()
+    result = response.json()
+    choices = result.get("choices") or []
+    if not choices:
+        raise ValueError("DeepSeek 返回内容为空")
+    parsed = json.loads(choices[0]["message"]["content"])
+    required = ("title_zh", "abstract_zh", "summary_zh")
+    if any(not isinstance(parsed.get(key), str) or not parsed[key].strip()
+           for key in required):
+        raise ValueError("DeepSeek 返回字段不完整")
+    return {key: parsed[key].strip() for key in required}
+
+
+@app.route("/api/enrich", methods=["POST"])
+def enrich_paper():
+    """处理当前展示的单篇论文，避免一次翻译整批论文。"""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "请求必须是 JSON 对象"}), 400
+
+    title = data.get("title", "")
+    if not isinstance(title, str) or not title.strip() or len(title) > 500:
+        return jsonify({"error": "论文标题无效"}), 400
+
+    paper = {
+        "title": title.strip(),
+        "abstract": data.get("abstract", "") if isinstance(data.get("abstract", ""), str) else "",
+        "journal": data.get("journal", "") if isinstance(data.get("journal", ""), str) else "",
+        "authors": data.get("authors", "") if isinstance(data.get("authors", ""), str) else ""
+    }
+    paper["abstract"] = paper["abstract"][:12000]
+    cache_key = paper["title"] + "\n" + paper["abstract"]
+
+    with cache_lock:
+        cached = ENRICHMENT_CACHE.get(cache_key)
+    if cached:
+        return jsonify(cached)
+    if not DEEPSEEK_API_KEY:
+        return jsonify({"error": "DeepSeek API 尚未配置"}), 503
+
+    try:
+        enriched = call_deepseek_enrich(paper)
+    except (requests.RequestException, ValueError, KeyError, TypeError,
+            RuntimeError, json.JSONDecodeError) as error:
+        app.logger.warning("论文翻译与总结失败: %s", error)
+        return jsonify({"error": "翻译与总结服务暂时不可用"}), 502
+
+    with cache_lock:
+        ENRICHMENT_CACHE[cache_key] = enriched
+    return jsonify(enriched)
 
 
 # ==========================================
