@@ -2,6 +2,8 @@
 from flask import Flask, jsonify, render_template
 import requests
 import time
+import os
+from flask import request
 from datetime import datetime
 
 app = Flask(__name__)
@@ -162,6 +164,97 @@ def get_papers():
         "papers": all_papers,
         "count": len(all_papers),
         "errors": errors
+    })
+
+
+# ===============================
+# PaperToday 自动翻译模块
+# ===============================
+
+TRANSLATION_CACHE = {}
+
+DEEPL_API_KEY = os.environ.get("DEEPL_API_KEY", "")
+DEEPL_API_URL = os.environ.get(
+    "DEEPL_API_URL",
+    "https://api-free.deepl.com/v2/translate"
+)
+
+
+@app.route("/api/translate", methods=["POST"])
+def translate_papers():
+    """
+    批量翻译英文论文标题。
+    前端提交:
+    {"titles": ["English title 1", "English title 2"]}
+    """
+
+    data = request.get_json(silent=True) or {}
+    titles = data.get("titles", [])
+
+    if not isinstance(titles, list):
+        return jsonify({"error": "titles 必须为数组"}), 400
+
+    if len(titles) > 15 or any(
+        not isinstance(title, str) or len(title) > 500
+        for title in titles
+    ):
+        return jsonify({"error": "请求数量或长度超出限制"}), 400
+
+    if not DEEPL_API_KEY:
+        return jsonify({
+            "error": "服务器尚未配置翻译 API 密钥"
+        }), 503
+
+    # 查找尚未翻译的标题
+    missing = list(dict.fromkeys(
+        title for title in titles
+        if title.strip() and title not in TRANSLATION_CACHE
+    ))
+
+    if missing:
+        try:
+            payload = {
+                "text": missing,
+                "source_lang": "EN",
+                "target_lang": "ZH"
+            }
+
+            response = requests.post(
+                DEEPL_API_URL,
+                json=payload,
+                headers={
+                    "Authorization": f"DeepL-Auth-Key {DEEPL_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                timeout=30
+            )
+
+            response.raise_for_status()
+            result = response.json()
+
+            translations = result.get("translations", [])
+
+            if len(translations) != len(missing):
+                raise ValueError("翻译数量不匹配")
+
+            for original, translated in zip(
+                missing, translations
+            ):
+                TRANSLATION_CACHE[original] = (
+                    translated.get("text", original)
+                )
+
+        except (requests.RequestException, ValueError) as e:
+            app.logger.warning("论文翻译失败: %s", e)
+            return jsonify({
+                "error": "翻译服务暂时不可用"
+            }), 502
+
+    return jsonify({
+        "translations": [
+            TRANSLATION_CACHE.get(title, title)
+            for title in titles
+        ]
     })
 
 
