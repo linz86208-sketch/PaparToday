@@ -1,14 +1,26 @@
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 import requests
 import time
 import os
-from flask import request
+import json
+import logging
 from datetime import datetime
+from threading import Lock
+
+# ==========================================
+# 1. Flask 初始化
+# ==========================================
 
 app = Flask(__name__)
 
-# 期刊名称与 ISSN
+logging.basicConfig(level=logging.INFO)
+
+
+# ==========================================
+# 2. 学术期刊配置
+# ==========================================
+
 JOURNALS = {
     "nature": {
         "name": "Nature",
@@ -24,13 +36,51 @@ JOURNALS = {
     }
 }
 
-# 缓存论文数据，减少重复请求
-CACHE = {}
+
+# ==========================================
+# 3. 缓存配置
+# ==========================================
+
+# 论文缓存
+PAPER_CACHE = {}
+
+# 论文缓存有效期：30 分钟
 CACHE_SECONDS = 1800
 
+# 翻译缓存
+TRANSLATION_CACHE = {}
+
+# 线程锁
+cache_lock = Lock()
+
+
+# ==========================================
+# 4. DeepSeek API 配置
+# ==========================================
+
+DEEPSEEK_API_KEY = os.environ.get(
+    "DEEPSEEK_API_KEY", ""
+)
+
+DEEPSEEK_API_URL = (
+    "https://api.deepseek.com/chat/completions"
+)
+
+DEEPSEEK_MODEL = os.environ.get(
+    "DEEPSEEK_MODEL",
+    "deepseek-flash"
+)
+
+
+# ==========================================
+# 5. 论文日期处理
+# ==========================================
 
 def get_publish_date(item):
-    """提取论文发表日期"""
+    """
+    从 Crossref 元数据提取发表日期
+    """
+
     info = (
         item.get("published-online")
         or item.get("published-print")
@@ -38,35 +88,50 @@ def get_publish_date(item):
         or {}
     )
 
-    parts = info.get("date-parts", [[]])[0]
+    date_parts = info.get("date-parts") or [[]]
+    parts = date_parts[0]
 
     if not parts:
         return "未知日期"
 
-    year = parts[0]
-    month = parts[1] if len(parts) > 1 else 1
-    day = parts[2] if len(parts) > 2 else 1
-
     try:
-        return datetime(year, month, day).strftime("%Y-%m-%d")
-    except ValueError:
+        year = int(parts[0])
+        month = int(parts[1]) if len(parts) > 1 else 1
+        day = int(parts[2]) if len(parts) > 2 else 1
+
+        return datetime(
+            year, month, day
+        ).strftime("%Y-%m-%d")
+
+    except (ValueError, TypeError, OverflowError):
         return "未知日期"
 
 
+# ==========================================
+# 6. 获取期刊论文
+# ==========================================
+
 def fetch_journal_papers(journal_key):
-    """从 Crossref 获取某个期刊的最新论文"""
+    """
+    调用 Crossref API 获取指定期刊论文
+    """
+
     journal = JOURNALS[journal_key]
 
-    # 优先使用缓存
     now = time.time()
 
-    if journal_key in CACHE:
-        cached_time, cached_data = CACHE[journal_key]
-        if now - cached_time < CACHE_SECONDS:
-            return cached_data
+    # 优先读取缓存
+    with cache_lock:
+        cached = PAPER_CACHE.get(journal_key)
+
+        if cached:
+            cached_time, cached_data = cached
+
+            if now - cached_time < CACHE_SECONDS:
+                return cached_data
 
     url = (
-        f"https://api.crossref.org/journals/"
+        "https://api.crossref.org/journals/"
         f"{journal['issn']}/works"
     )
 
@@ -77,12 +142,18 @@ def fetch_journal_papers(journal_key):
         "rows": 20
     }
 
+    headers = {
+        "User-Agent": (
+            "PaperToday/1.0 "
+            "(Academic Research News Aggregator)"
+        ),
+        "Accept": "application/json"
+    }
+
     response = requests.get(
         url,
         params=params,
-        headers={
-            "User-Agent": "PaperToday/0.1 (academic project)"
-        },
+        headers=headers,
         timeout=20
     )
 
@@ -93,68 +164,137 @@ def fetch_journal_papers(journal_key):
     papers = []
 
     for item in items:
-        title = item.get("title", [""])
 
-        if not title or not title[0].strip():
+        titles = item.get("title") or []
+
+        if not titles:
             continue
 
+        title = titles[0].strip()
+
+        if not title:
+            continue
+
+        # 作者信息
         authors = []
 
         for author in item.get("author", [])[:4]:
-            name = (
-                author.get("given", "") + " " +
-                author.get("family", "")
-            ).strip()
+
+            given = author.get("given", "")
+            family = author.get("family", "")
+
+            name = f"{given} {family}".strip()
 
             if name:
                 authors.append(name)
 
+        author_text = (
+            ", ".join(authors)
+            if authors
+            else "未知作者"
+        )
+
+        # DOI 信息
         doi = item.get("DOI", "")
 
+        if doi:
+            paper_url = f"https://doi.org/{doi}"
+        else:
+            paper_url = item.get("URL", "")
+
         paper = {
-            "title": title[0],
-            "authors": ", ".join(authors) if authors else "未知作者",
+            "title": title,
+            "authors": author_text,
             "journal": journal["name"],
             "date": get_publish_date(item),
             "doi": doi,
-            "url": f"https://doi.org/{doi}" if doi else item.get("URL", "")
+            "url": paper_url
         }
 
         papers.append(paper)
 
-    CACHE[journal_key] = (now, papers)
+    # 保存缓存
+    with cache_lock:
+        PAPER_CACHE[journal_key] = (
+            time.time(),
+            papers
+        )
+
+    app.logger.info(
+        "成功获取 %s 论文 %s 篇",
+        journal["name"],
+        len(papers)
+    )
+
     return papers
 
+
+# ==========================================
+# 7. 网站首页
+# ==========================================
 
 @app.route("/")
 def home():
     return render_template("index.html")
 
 
-@app.route("/api/papers")
+# ==========================================
+# 8. 论文数据接口
+# ==========================================
+
+@app.route("/api/papers", methods=["GET"])
 def get_papers():
-    from flask import request
 
-    journal = request.args.get("journal", "all").lower()
+    journal = request.args.get(
+        "journal", "all"
+    ).lower()
 
-    if journal != "all" and journal not in JOURNALS:
+    if (
+        journal != "all"
+        and journal not in JOURNALS
+    ):
         return jsonify({
             "error": "不支持的期刊分类"
         }), 400
 
-    keys = list(JOURNALS.keys()) if journal == "all" else [journal]
+    if journal == "all":
+        keys = list(JOURNALS.keys())
+    else:
+        keys = [journal]
 
     all_papers = []
     errors = []
 
     for key in keys:
+
         try:
-            all_papers.extend(fetch_journal_papers(key))
-        except (requests.RequestException, ValueError, KeyError) as e:
-            app.logger.warning("获取 %s 失败: %s", key, e)
+            papers = fetch_journal_papers(key)
+
+            all_papers.extend(papers)
+
+        except (
+            requests.RequestException,
+            ValueError,
+            KeyError,
+            TypeError
+        ) as error:
+
+            app.logger.warning(
+                "获取 %s 论文失败: %s",
+                key,
+                error
+            )
+
             errors.append(key)
 
-    # 论文按照发表日期排序
+            # 数据源故障时尝试读取旧缓存
+            with cache_lock:
+                cached = PAPER_CACHE.get(key)
+
+            if cached:
+                all_papers.extend(cached[1])
+
+    # 按发表日期排序
     all_papers.sort(
         key=lambda x: x["date"],
         reverse=True
@@ -167,96 +307,280 @@ def get_papers():
     })
 
 
-# ===============================
-# PaperToday 自动翻译模块
-# ===============================
+# ==========================================
+# 9. DeepSeek 学术翻译
+# ==========================================
 
-TRANSLATION_CACHE = {}
+def call_deepseek_translate(titles):
+    """
+    调用 DeepSeek 翻译英文论文标题
 
-DEEPL_API_KEY = os.environ.get("DEEPL_API_KEY", "")
-DEEPL_API_URL = os.environ.get(
-    "DEEPL_API_URL",
-    "https://api-free.deepl.com/v2/translate"
-)
+    参数：
+        titles: 英文标题列表
 
+    返回：
+        中文标题列表
+    """
+
+    if not DEEPSEEK_API_KEY:
+        raise RuntimeError(
+            "DeepSeek API Key 未配置"
+        )
+
+    system_prompt = """
+你是一名专业的科研论文翻译助手。
+
+任务：
+将用户提供的英文学术论文标题翻译为简体中文。
+
+要求：
+1. 翻译准确，符合中文学术表达习惯。
+2. 正确保留专业术语、人名与缩写。
+3. 不要自行增加原文不存在的信息。
+4. 不要解释论文内容。
+5. 翻译顺序必须与输入顺序完全一致。
+6. 只返回合法 JSON 对象。
+
+JSON 输出格式示例：
+
+{
+  "translations": [
+    "第一篇论文中文标题",
+    "第二篇论文中文标题"
+  ]
+}
+"""
+
+    user_prompt = json.dumps(
+        {
+            "titles": titles
+        },
+        ensure_ascii=False
+    )
+
+    payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": system_prompt
+            },
+            {
+                "role": "user",
+                "content": user_prompt
+            }
+        ],
+        "response_format": {
+            "type": "json_object"
+        },
+        "stream": False,
+        "max_tokens": 3000
+    }
+
+    headers = {
+        "Authorization": (
+            f"Bearer {DEEPSEEK_API_KEY}"
+        ),
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(
+        DEEPSEEK_API_URL,
+        headers=headers,
+        json=payload,
+        timeout=60
+    )
+
+    response.raise_for_status()
+
+    result = response.json()
+
+    choices = result.get("choices", [])
+
+    if not choices:
+        raise ValueError(
+            "DeepSeek 返回内容为空"
+        )
+
+    choice = choices[0]
+
+    if choice.get("finish_reason") != "stop":
+        raise ValueError(
+            "DeepSeek 未正常完成翻译"
+        )
+
+    content = choice["message"]["content"]
+
+    if not content:
+        raise ValueError(
+            "DeepSeek 翻译结果为空"
+        )
+
+    parsed = json.loads(content)
+
+    translated = parsed.get("translations")
+
+    if not isinstance(translated, list):
+        raise ValueError(
+            "翻译结果不是数组"
+        )
+
+    if len(translated) != len(titles):
+        raise ValueError(
+            "翻译结果数量不匹配"
+        )
+
+    for item in translated:
+
+        if (
+            not isinstance(item, str)
+            or not item.strip()
+        ):
+            raise ValueError(
+                "翻译结果包含无效标题"
+            )
+
+    return translated
+
+
+# ==========================================
+# 10. 论文自动翻译接口
+# ==========================================
 
 @app.route("/api/translate", methods=["POST"])
 def translate_papers():
-    """
-    批量翻译英文论文标题。
-    前端提交:
-    {"titles": ["English title 1", "English title 2"]}
-    """
 
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return jsonify({
+            "error": "请求必须是 JSON 对象"
+        }), 400
+
     titles = data.get("titles", [])
 
+    # 参数类型检查
     if not isinstance(titles, list):
-        return jsonify({"error": "titles 必须为数组"}), 400
-
-    if len(titles) > 15 or any(
-        not isinstance(title, str) or len(title) > 500
-        for title in titles
-    ):
-        return jsonify({"error": "请求数量或长度超出限制"}), 400
-
-    if not DEEPL_API_KEY:
         return jsonify({
-            "error": "服务器尚未配置翻译 API 密钥"
+            "error": "titles 必须为数组"
+        }), 400
+
+    # 限制批量翻译规模
+    if len(titles) > 12:
+        return jsonify({
+            "error": "单次最多翻译 12 篇论文"
+        }), 400
+
+    for title in titles:
+
+        if not isinstance(title, str):
+            return jsonify({
+                "error": "论文标题必须为字符串"
+            }), 400
+
+        if len(title) > 500:
+            return jsonify({
+                "error": "论文标题长度超限"
+            }), 400
+
+    if not titles:
+        return jsonify({
+            "translations": []
+        })
+
+    if not DEEPSEEK_API_KEY:
+        return jsonify({
+            "error": "DeepSeek API 尚未配置"
         }), 503
 
-    # 查找尚未翻译的标题
-    missing = list(dict.fromkeys(
-        title for title in titles
-        if title.strip() and title not in TRANSLATION_CACHE
-    ))
+    # 收集未翻译的标题
+    with cache_lock:
+        missing = list(dict.fromkeys(
+            title
+            for title in titles
+            if (
+                title.strip()
+                and title not in TRANSLATION_CACHE
+            )
+        ))
 
     if missing:
-        try:
-            payload = {
-                "text": missing,
-                "source_lang": "EN",
-                "target_lang": "ZH"
-            }
 
-            response = requests.post(
-                DEEPL_API_URL,
-                json=payload,
-                headers={
-                    "Authorization": f"DeepL-Auth-Key {DEEPL_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                timeout=30
+        try:
+
+            translated = call_deepseek_translate(
+                missing
             )
 
-            response.raise_for_status()
-            result = response.json()
+            with cache_lock:
+                for original, chinese in zip(
+                    missing,
+                    translated
+                ):
+                    TRANSLATION_CACHE[original] = chinese
 
-            translations = result.get("translations", [])
+            app.logger.info(
+                "成功翻译 %s 篇论文",
+                len(missing)
+            )
 
-            if len(translations) != len(missing):
-                raise ValueError("翻译数量不匹配")
+        except (
+            requests.RequestException,
+            ValueError,
+            KeyError,
+            TypeError,
+            RuntimeError,
+            json.JSONDecodeError
+        ) as error:
 
-            for original, translated in zip(
-                missing, translations
-            ):
-                TRANSLATION_CACHE[original] = (
-                    translated.get("text", original)
-                )
+            app.logger.warning(
+                "DeepSeek 翻译失败: %s",
+                error
+            )
 
-        except (requests.RequestException, ValueError) as e:
-            app.logger.warning("论文翻译失败: %s", e)
             return jsonify({
                 "error": "翻译服务暂时不可用"
             }), 502
 
-    return jsonify({
-        "translations": [
-            TRANSLATION_CACHE.get(title, title)
+    # 按前端提交的顺序返回译文
+    with cache_lock:
+        result = [
+            TRANSLATION_CACHE.get(
+                title,
+                title
+            )
             for title in titles
         ]
+
+    return jsonify({
+        "translations": result
     })
 
 
+# ==========================================
+# 11. 健康检查接口
+# ==========================================
+
+@app.route("/health", methods=["GET"])
+def health_check():
+
+    return jsonify({
+        "status": "ok",
+        "service": "PaperToday",
+        "translation_configured": bool(
+            DEEPSEEK_API_KEY
+        )
+    })
+
+
+# ==========================================
+# 12. 本地开发启动
+# ==========================================
+
 if __name__ == "__main__":
-    app.run(debug=True)
+
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=True
+    )
