@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PaperToday 全球学术前沿论文资讯聚合平台">
     <title>PaperToday - 全球学术前沿</title>
 
     <style>
@@ -23,7 +24,13 @@
             text-decoration: none;
         }
 
-        /* 顶部导航 */
+        button {
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        /* ========== 顶部导航 ========== */
+
         header {
             background: white;
             border-bottom: 1px solid #e8edf5;
@@ -62,14 +69,16 @@
 
         .search-box input {
             width: 100%;
+            min-width: 0;
             border: 1px solid #dce4ef;
             border-radius: 8px 0 0 8px;
             padding: 12px;
             outline: none;
+            font-size: 14px;
         }
 
-        button {
-            cursor: pointer;
+        .search-box input:focus {
+            border-color: #1769bc;
         }
 
         .search-box button {
@@ -85,21 +94,25 @@
             font-size: 14px;
         }
 
-        /* 主体 */
+        /* ========== 主体容器 ========== */
+
         .container {
             max-width: 1200px;
             margin: 28px auto;
             padding: 0 20px;
         }
 
-        /* 轮播公告 */
+        /* ========== 顶部论文轮播 ========== */
+
         .banner {
             background: linear-gradient(120deg, #123f70, #2278bf);
             color: white;
             padding: 32px;
             border-radius: 14px;
             margin-bottom: 26px;
-            min-height: 170px;
+            min-height: 240px;
+            position: relative;
+            overflow: hidden;
         }
 
         .banner-tag {
@@ -113,19 +126,57 @@
         #banner-title {
             font-size: 24px;
             margin: 18px 0 10px;
-            line-height: 1.5;
+            line-height: 1.55;
+            overflow-wrap: anywhere;
         }
 
         #banner-title a:hover {
             text-decoration: underline;
         }
 
+        .banner-english {
+            color: #d9e8fa;
+            font-size: 14px;
+            font-weight: normal;
+            line-height: 1.7;
+            margin: 10px 0;
+        }
+
         #banner-desc {
+            font-size: 13px;
+            color: #dbe9ff;
+            margin-top: 12px;
+        }
+
+        .banner-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 22px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .banner-controls button {
+            border: 1px solid rgba(255,255,255,0.4);
+            background: rgba(255,255,255,0.12);
+            color: white;
+            border-radius: 6px;
+            padding: 8px 15px;
+            transition: background 0.2s;
+        }
+
+        .banner-controls button:hover {
+            background: rgba(255,255,255,0.28);
+        }
+
+        .banner-counter {
+            margin-left: auto;
             font-size: 13px;
             color: #dbe9ff;
         }
 
-        /* 三栏布局 */
+        /* ========== 三栏布局 ========== */
+
         .layout {
             display: grid;
             grid-template-columns: 190px minmax(0, 1fr) 220px;
@@ -138,7 +189,10 @@
             border: 1px solid #e9eef5;
             border-radius: 12px;
             padding: 20px;
+            min-width: 0;
         }
+
+        /* ========== 左侧导航 ========== */
 
         .sidebar h3 {
             margin: 0 0 20px;
@@ -165,6 +219,8 @@
             font-weight: bold;
         }
 
+        /* ========== 论文信息流 ========== */
+
         .feed-title {
             font-size: 20px;
             font-weight: bold;
@@ -190,21 +246,32 @@
             border-radius: 5px;
         }
 
-        .paper h3 {
-            font-size: 18px;
-            line-height: 1.65;
-            margin: 12px 0;
+        .paper-title-zh {
+            font-size: 19px;
+            font-weight: 600;
+            line-height: 1.7;
+            margin: 12px 0 6px;
+            color: #24364d;
             overflow-wrap: anywhere;
         }
 
-        .paper h3 a:hover {
+        .paper-title-zh a:hover {
             color: #1769bc;
+        }
+
+        .paper-title-en {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #79869a;
+            margin-bottom: 12px;
+            overflow-wrap: anywhere;
         }
 
         .paper-info {
             font-size: 13px;
             color: #8290a4;
             line-height: 1.9;
+            overflow-wrap: anywhere;
         }
 
         .paper-link {
@@ -214,15 +281,14 @@
             color: #1769bc;
         }
 
-        .right-panel h3 {
-            font-size: 17px;
-            margin-top: 0;
+        .paper-link:hover {
+            text-decoration: underline;
         }
 
-        .right-panel p {
-            font-size: 14px;
-            color: #66758d;
-            line-height: 1.9;
+        .translation-status {
+            font-size: 12px;
+            color: #8a97aa;
+            margin: 10px 0;
         }
 
         .loading {
@@ -235,9 +301,39 @@
             margin-top: 10px;
             color: #8090a6;
             font-size: 12px;
+            line-height: 1.8;
         }
 
-        /* 手机与窄屏适配 */
+        /* ========== 右侧信息 ========== */
+
+        .right-panel h3 {
+            font-size: 17px;
+            margin-top: 0;
+        }
+
+        .right-panel p {
+            font-size: 14px;
+            color: #66758d;
+            line-height: 1.9;
+        }
+
+        .info-divider {
+            height: 1px;
+            background: #edf0f5;
+            margin: 18px 0;
+        }
+
+        /* ========== 页脚 ========== */
+
+        footer {
+            text-align: center;
+            padding: 35px 15px;
+            color: #9aa7b8;
+            font-size: 12px;
+        }
+
+        /* ========== 响应式适配 ========== */
+
         @media (max-width: 950px) {
             .layout {
                 grid-template-columns: 175px minmax(0, 1fr);
@@ -269,12 +365,20 @@
                 width: auto;
             }
 
+            .header-inner {
+                gap: 12px;
+            }
+
             .header-label {
                 display: none;
             }
 
             .logo {
                 font-size: 20px;
+            }
+
+            .search-box button {
+                padding: 0 12px;
             }
 
             .banner {
@@ -284,42 +388,94 @@
             #banner-title {
                 font-size: 19px;
             }
+
+            .banner-counter {
+                margin-left: 0;
+            }
+
+            .paper-title-zh {
+                font-size: 17px;
+            }
         }
     </style>
 </head>
 
 <body>
 
+<!-- 顶部导航 -->
 <header>
     <div class="header-inner">
-        <div class="logo">Paper<span>Today</span></div>
+
+        <a href="/" class="logo">
+            Paper<span>Today</span>
+        </a>
 
         <div class="search-box">
             <input
                 id="search-input"
-                type="text"
-                placeholder="搜索当前列表中的论文标题..."
+                type="search"
+                placeholder="搜索当前列表中的论文..."
+                aria-label="搜索论文"
             >
-            <button id="search-button">搜索</button>
+            <button id="search-button">
+                搜索
+            </button>
         </div>
 
-        <div class="header-label">全球科研资讯聚合平台</div>
+        <div class="header-label">
+            全球科研资讯聚合平台
+        </div>
+
     </div>
 </header>
 
 <div class="container">
 
-    <!-- 顶部论文轮播 -->
+    <!-- 顶部学术快讯轮播 -->
     <section class="banner">
-        <span class="banner-tag">学术前沿 · 最新动态</span>
-        <h2 id="banner-title">正在获取全球最新科研论文...</h2>
-        <div id="banner-desc">Nature · Science · Cell</div>
+
+        <span class="banner-tag">
+            学术前沿 · 最新动态
+        </span>
+
+        <h2 id="banner-title">
+            正在获取全球最新科研论文...
+        </h2>
+
+        <div id="banner-english" class="banner-english"></div>
+
+        <div id="banner-desc">
+            Nature · Science · Cell
+        </div>
+
+        <div class="banner-controls">
+
+            <button id="banner-prev" type="button">
+                ← 上一条
+            </button>
+
+            <button id="banner-pause" type="button">
+                暂停轮播
+            </button>
+
+            <button id="banner-next" type="button">
+                下一条 →
+            </button>
+
+            <span id="banner-counter" class="banner-counter">
+                0 / 0
+            </span>
+
+        </div>
+
     </section>
 
+    <!-- 网站主体 -->
     <div class="layout">
 
-        <!-- 左侧分类 -->
+        <!-- 左侧导航 -->
         <aside class="panel sidebar">
+
             <h3>学术导航</h3>
 
             <button class="category active" data-journal="all">
@@ -337,26 +493,42 @@
             <button class="category" data-journal="cell">
                 Cell
             </button>
+
         </aside>
 
-        <!-- 中间论文信息流 -->
+        <!-- 中间论文列表 -->
         <main class="panel">
-            <div class="feed-title">最新论文</div>
-            <div class="status" id="status">正在连接学术数据库...</div>
+
+            <div class="feed-title">
+                最新论文
+            </div>
+
+            <div class="status" id="status">
+                正在连接学术数据库...
+            </div>
+
+            <div class="status" id="translate-status" aria-live="polite">
+            </div>
 
             <div id="paper-list">
-                <div class="loading">正在加载论文，请稍候...</div>
+                <div class="loading">
+                    正在加载论文，请稍候...
+                </div>
             </div>
+
         </main>
 
-        <!-- 右侧 -->
+        <!-- 右侧信息栏 -->
         <aside class="panel right-panel">
+
             <h3>关于 PaperToday</h3>
 
             <p>
                 汇聚全球前沿学术成果，
-                追踪科研最新进展。
+                追踪最新科研进展。
             </p>
+
+            <div class="info-divider"></div>
 
             <h3>当前数据来源</h3>
 
@@ -364,29 +536,64 @@
             <p>Science</p>
             <p>Cell</p>
 
+            <div class="info-divider"></div>
+
+            <h3>核心功能</h3>
+
+            <p>实时论文资讯</p>
+            <p>中英双语展示</p>
+            <p>自动论文轮播</p>
+            <p>论文分类检索</p>
+
+            <div class="info-divider"></div>
+
             <h3>数据说明</h3>
 
             <p>
-                论文元数据由 Crossref API 提供。
-                点击论文标题可访问原文页面。
+                论文元数据由 Crossref API 提供，
+                翻译内容仅供科研阅读参考。
+                点击论文标题可访问原始论文页面。
             </p>
+
         </aside>
 
     </div>
+
 </div>
 
+<footer>
+    © 2026 PaperToday · 全球学术资讯聚合平台
+</footer>
+
 <script>
+    "use strict";
+
+    // ========================================
+    // 1. 全局变量
+    // ========================================
+
     let papers = [];
     let bannerIndex = 0;
     let currentJournal = "all";
+    let bannerPlaying = true;
+    let loadVersion = 0;
+    let translationEnabled = false;
+
+    // 已翻译论文缓存
+    const translations = new Map();
 
     const listElement = document.getElementById("paper-list");
     const statusElement = document.getElementById("status");
+    const translateStatus = document.getElementById("translate-status");
     const searchInput = document.getElementById("search-input");
 
-    // 转义文本，避免将论文标题当成 HTML 执行
+
+    // ========================================
+    // 2. 安全处理工具
+    // ========================================
+
     function escapeHTML(value) {
-        return String(value).replace(/[&<>"']/g, char => ({
+        return String(value ?? "").replace(/[&<>"']/g, char => ({
             "&": "&amp;",
             "<": "&lt;",
             ">": "&gt;",
@@ -395,7 +602,6 @@
         }[char]));
     }
 
-    // 仅允许 HTTPS 链接
     function safeURL(value) {
         try {
             const url = new URL(value);
@@ -405,13 +611,22 @@
         }
     }
 
-    // 获取后端真实论文数据
+
+    // ========================================
+    // 3. 获取论文数据
+    // ========================================
+
     async function loadPapers(journal = "all") {
         currentJournal = journal;
+
+        // 请求版本号，用于防止旧请求覆盖新请求
+        const version = ++loadVersion;
+
         listElement.innerHTML =
             '<div class="loading">正在加载真实论文数据...</div>';
 
         statusElement.textContent = "正在更新论文列表...";
+        translateStatus.textContent = "";
 
         try {
             const response = await fetch(
@@ -424,30 +639,142 @@
 
             const data = await response.json();
 
-            // 避免较早请求覆盖后续选择的分类
-            if (currentJournal !== journal) return;
+            if (version !== loadVersion) return;
 
-            papers = data.papers || [];
+            papers = Array.isArray(data.papers)
+                ? data.papers
+                : [];
 
-            renderPapers(papers);
+            bannerIndex = 0;
+
+            // 首先显示英文原始数据
+            applySearch();
+            updateBanner();
+
+            const errors = Array.isArray(data.errors)
+                ? data.errors
+                : [];
 
             statusElement.textContent =
                 `共 ${papers.length} 篇论文 · 数据来源 Crossref` +
-                (data.errors.length
-                    ? ` · 部分来源加载失败：${data.errors.join(", ")}`
+                (errors.length
+                    ? ` · 部分来源加载失败：${errors.join(", ")}`
                     : "");
 
-            updateBanner();
+            // 论文加载完成后异步请求翻译
+            await translatePaperTitles(papers, version);
 
         } catch (error) {
-            listElement.innerHTML =
-                '<div class="loading">论文获取失败，请检查网络或稍后重试。</div>';
+            if (version !== loadVersion) return;
 
-            statusElement.textContent = "连接失败：" + error.message;
+            papers = [];
+            bannerIndex = 0;
+
+            listElement.innerHTML =
+                '<div class="loading">论文获取失败，请稍后重试。</div>';
+
+            statusElement.textContent =
+                "连接失败：" + error.message;
+
+            updateBanner();
         }
     }
 
-    // 展示论文卡片
+
+    // ========================================
+    // 4. 自动翻译论文标题
+    // ========================================
+
+    async function translatePaperTitles(data, version) {
+
+        // 首批翻译最新 12 篇，降低 API 消耗
+        const batch = data.slice(0, 12);
+
+        // 排除已经翻译过的标题
+        const titles = [...new Set(
+            batch
+                .map(p => p.title)
+                .filter(title =>
+                    title &&
+                    typeof title === "string" &&
+                    title.length <= 500 &&
+                    !translations.has(title)
+                )
+        )];
+
+        if (titles.length === 0) {
+            translateStatus.textContent =
+                "已显示现有中文翻译";
+            return;
+        }
+
+        translateStatus.textContent =
+            `正在翻译最新 ${titles.length} 篇论文标题...`;
+
+        try {
+            const response = await fetch("/api/translate", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    titles: titles
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error("翻译服务未就绪");
+            }
+
+            const result = await response.json();
+
+            if (!Array.isArray(result.translations) ||
+                result.translations.length !== titles.length) {
+                throw new Error("翻译返回数据格式错误");
+            }
+
+            // 保存翻译结果
+            titles.forEach((title, index) => {
+                const translated = result.translations[index];
+
+                if (
+                    typeof translated === "string" &&
+                    translated.trim()
+                ) {
+                    translations.set(title, translated);
+                }
+            });
+
+            if (version !== loadVersion) return;
+
+            translationEnabled = true;
+
+            translateStatus.textContent =
+                "中文标题翻译完成 · 翻译仅供参考";
+
+            // 重新渲染当前搜索结果，避免清除搜索状态
+            applySearch();
+
+            // 更新顶部轮播
+            updateBanner();
+
+        } catch (error) {
+            console.warn("翻译失败：", error);
+
+            if (version !== loadVersion) return;
+
+            translationEnabled = false;
+
+            translateStatus.textContent =
+                "中文翻译暂不可用，已保留英文原文";
+        }
+    }
+
+
+    // ========================================
+    // 5. 渲染论文卡片
+    // ========================================
+
     function renderPapers(data) {
         listElement.innerHTML = "";
 
@@ -458,24 +785,45 @@
         }
 
         data.forEach(paper => {
+
             const article = document.createElement("article");
             article.className = "paper";
 
             const link = safeURL(paper.url);
-            const title = escapeHTML(paper.title);
+            const originalTitle = escapeHTML(paper.title);
+
+            const translatedTitle = translations.get(paper.title);
+
+            const displayTitle = escapeHTML(
+                translatedTitle || paper.title
+            );
+
+            const titleContent = link
+                ? `<a href="${escapeHTML(link)}"
+                      target="_blank"
+                      rel="noopener noreferrer">
+                      ${displayTitle}
+                   </a>`
+                : displayTitle;
+
+            const englishTitleHTML = translatedTitle
+                ? `<div class="paper-title-en">
+                       ${originalTitle}
+                   </div>`
+                : `<div class="translation-status">
+                       英文原始标题
+                   </div>`;
 
             article.innerHTML = `
                 <span class="journal-tag">
                     ${escapeHTML(paper.journal)}
                 </span>
 
-                <h3>
-                    ${link
-                        ? `<a href="${escapeHTML(link)}"
-                              target="_blank"
-                              rel="noopener noreferrer">${title}</a>`
-                        : title}
+                <h3 class="paper-title-zh">
+                    ${titleContent}
                 </h3>
+
+                ${englishTitleHTML}
 
                 <div class="paper-info">
                     作者：${escapeHTML(paper.authors)}
@@ -487,9 +835,11 @@
 
                 ${link
                     ? `<a class="paper-link"
-                         href="${escapeHTML(link)}"
-                         target="_blank"
-                         rel="noopener noreferrer">查看论文原文 →</a>`
+                          href="${escapeHTML(link)}"
+                          target="_blank"
+                          rel="noopener noreferrer">
+                          查看论文原文 →
+                       </a>`
                     : ""}
             `;
 
@@ -497,47 +847,142 @@
         });
     }
 
-    // 自动切换顶部论文
+
+    // ========================================
+    // 6. 搜索论文
+    // ========================================
+
+    function applySearch() {
+        const keyword = searchInput.value.trim().toLowerCase();
+
+        const results = papers.filter(paper => {
+
+            const englishTitle = String(
+                paper.title || ""
+            ).toLowerCase();
+
+            const chineseTitle = String(
+                translations.get(paper.title) || ""
+            ).toLowerCase();
+
+            const authors = String(
+                paper.authors || ""
+            ).toLowerCase();
+
+            return (
+                englishTitle.includes(keyword) ||
+                chineseTitle.includes(keyword) ||
+                authors.includes(keyword)
+            );
+        });
+
+        renderPapers(results);
+    }
+
+
+    // ========================================
+    // 7. 顶部轮播
+    // ========================================
+
     function updateBanner() {
+
         const title = document.getElementById("banner-title");
+        const english = document.getElementById("banner-english");
         const desc = document.getElementById("banner-desc");
+        const counter = document.getElementById("banner-counter");
 
         if (!papers.length) {
             title.textContent = "暂无可展示的论文";
+            english.textContent = "";
             desc.textContent = "请检查论文数据连接";
+            counter.textContent = "0 / 0";
             return;
         }
 
-        if (bannerIndex >= papers.length) bannerIndex = 0;
+        // 支持索引循环
+        bannerIndex =
+            ((bannerIndex % papers.length) + papers.length)
+            % papers.length;
 
         const paper = papers[bannerIndex];
-        title.textContent = "";
 
+        const translatedTitle = translations.get(paper.title);
+        const displayTitle = translatedTitle || paper.title;
         const link = safeURL(paper.url);
+
+        title.textContent = "";
 
         if (link) {
             const anchor = document.createElement("a");
             anchor.href = link;
             anchor.target = "_blank";
             anchor.rel = "noopener noreferrer";
-            anchor.textContent = paper.title;
+            anchor.textContent = displayTitle;
+
             title.appendChild(anchor);
         } else {
-            title.textContent = paper.title;
+            title.textContent = displayTitle;
         }
 
-        desc.textContent = `${paper.journal} · ${paper.date}`;
+        // 有翻译时显示英文原标题
+        english.textContent = translatedTitle
+            ? paper.title
+            : "";
+
+        desc.textContent =
+            `${paper.journal} · ${paper.date}`;
+
+        counter.textContent =
+            `${bannerIndex + 1} / ${papers.length}`;
     }
 
-    // 每五秒切换一次论文
+
+    // ========================================
+    // 8. 轮播控制
+    // ========================================
+
+    // 每五秒自动切换一次
     setInterval(() => {
-        bannerIndex++;
-        updateBanner();
+        if (bannerPlaying && papers.length > 0) {
+            bannerIndex++;
+            updateBanner();
+        }
     }, 5000);
 
-    // 分类点击
+    // 上一条
+    document.getElementById("banner-prev")
+        .addEventListener("click", () => {
+            bannerIndex--;
+            updateBanner();
+        });
+
+    // 下一条
+    document.getElementById("banner-next")
+        .addEventListener("click", () => {
+            bannerIndex++;
+            updateBanner();
+        });
+
+    // 暂停 / 继续
+    document.getElementById("banner-pause")
+        .addEventListener("click", function () {
+
+            bannerPlaying = !bannerPlaying;
+
+            this.textContent = bannerPlaying
+                ? "暂停轮播"
+                : "继续播放";
+        });
+
+
+    // ========================================
+    // 9. 期刊分类切换
+    // ========================================
+
     document.querySelectorAll(".category").forEach(button => {
+
         button.addEventListener("click", () => {
+
             document.querySelectorAll(".category").forEach(b => {
                 b.classList.remove("active");
             });
@@ -551,25 +996,25 @@
         });
     });
 
-    // 当前已获取列表的本地搜索
-    function searchPapers() {
-        const keyword = searchInput.value.trim().toLowerCase();
 
-        const results = papers.filter(p =>
-            p.title.toLowerCase().includes(keyword) ||
-            p.authors.toLowerCase().includes(keyword)
-        );
-
-        renderPapers(results);
-    }
+    // ========================================
+    // 10. 搜索事件
+    // ========================================
 
     document.getElementById("search-button")
-        .addEventListener("click", searchPapers);
+        .addEventListener("click", applySearch);
 
-    searchInput.addEventListener("input", searchPapers);
+    searchInput.addEventListener("input", applySearch);
 
-    // 页面加载时获取论文
-    loadPapers();
+
+    // ========================================
+    // 11. 页面初始化
+    // ========================================
+
+    document.addEventListener("DOMContentLoaded", () => {
+        loadPapers("all");
+    });
+
 </script>
 
 </body>
