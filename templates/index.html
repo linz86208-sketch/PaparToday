@@ -14,7 +14,7 @@
   <script>
     "use strict";
     // 每篇论文完整播放周期为 2 小时；需要调整时只改这个数值。
-    const ARTICLE_DURATION_MS=30*60*1000;
+    const ARTICLE_DURATION_MS=10*60*1000;
     let papers=[],paperIndex=0,playing=true,animationId=null,cycleStartedAt=0,elapsedBeforeStart=0;
     const paperElement=document.getElementById("paper"),statusElement=document.getElementById("cycle-status"),progressBar=document.getElementById("progress-bar"),toggleButton=document.getElementById("toggle");
     function escapeHTML(value){const node=document.createElement("div");node.textContent=String(value??"");return node.innerHTML}
